@@ -259,7 +259,7 @@ if st.session_state.data:
     rows_to_delete = edited_df[edited_df.delete == True]
     if not rows_to_delete.empty:
         # 修正之前的引號錯誤
-        st.error(⚠️ 您勾選了刪除，確定要移除這些資料嗎？")
+        st.error("⚠️ 您勾選了刪除，確定要移除這些資料嗎？")
         c_del_1, c_del_2 = st.columns([1, 6])
         with c_del_1:
             if st.button("是", type="primary"): # CSS 已將 primary 設為黑底紅字
@@ -339,3 +339,4 @@ if st.session_state.data:
             hide_index=True,
             use_container_width=True
         )
+
