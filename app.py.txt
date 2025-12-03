@@ -1,0 +1,341 @@
+import streamlit as st
+import pandas as pd
+import yfinance as yf
+from datetime import datetime
+
+# ---------------------------------------------------------
+# 1. 頁面設定與 CSS 樣式
+# ---------------------------------------------------------
+st.set_page_config(page_title="投資分析 App", layout="wide")
+
+# 自定義 CSS
+st.markdown("""
+    <style>
+    /* 全局背景色: 深藍色 #003060 */
+    .stApp {
+        background-color: #003060;
+    }
+    
+    /* 全局文字: 白色 */
+    .stApp, p, label, .stMarkdown, h1, h2, h3, h4, h5, h6, span, div {
+        color: #FFFFFF;
+    }
+
+    /* --- Point 3: 隱藏數字輸入框的 +/- 按鈕 --- */
+    div[data-testid="stNumberInput"] button {
+        display: none;
+    }
+
+    /* --- 輸入框樣式優化 --- */
+    /* 輸入框背景半透明黑，文字白色 */
+    .stTextInput input, .stNumberInput input, .stSelectbox div[data-baseweb="select"], .stDateInput input {
+        color: #FFFFFF !important; 
+        background-color: rgba(0, 0, 0, 0.3) !important; /* 改為深色半透明 */
+        border: 1px solid #FFFFFF !important;
+    }
+    /* 下拉選單選項 */
+    ul[data-testid="stSelectboxVirtualDropdown"] li {
+        background-color: #003060;
+        color: white;
+    }
+
+    /* --- Point 4 & 6: 按鈕樣式 (黑色底，白色字) --- */
+    div.stButton > button {
+        background-color: #000000 !important;
+        color: #FFFFFF !important;
+        border: 1px solid #FFFFFF !important;
+        font-weight: bold;
+        border-radius: 5px;
+        transition: 0.3s;
+    }
+    div.stButton > button:hover {
+        background-color: #333333 !important; /* 滑鼠懸停稍微變灰 */
+        border-color: #66B3FF !important;
+    }
+    /* 針對 Primary 按鈕 (如刪除確認) 也統一設為黑底 */
+    div.stButton > button[kind="primary"] {
+        background-color: #000000 !important;
+        color: #CE0000 !important; /* 刪除確認字體用紅色警示 */
+        border: 1px solid #CE0000 !important;
+    }
+
+    /* --- Point 5: 表格樣式還原 --- */
+    
+    /* 1. 第一列: 股票全名 (藍色背景) - 自定義 HTML 類別 */
+    .table-stock-header {
+        background-color: #66B3FF;
+        color: #000000 !important;
+        font-size: 18px;
+        font-weight: bold;
+        padding: 8px;
+        text-align: center;
+        border-top: 1px solid #000;
+        border-left: 1px solid #000;
+        border-right: 1px solid #000;
+        margin-bottom: 0px; /* 貼合下方表格 */
+    }
+
+    /* 2. Streamlit 表格容器調整 */
+    div[data-testid="stDataFrame"] {
+        background-color: transparent !important;
+        padding: 0px !important;
+    }
+    
+    /* 3. 強制修改表格 Header (灰色背景 #E0E0E0, 黑色文字) */
+    div[data-testid="stDataFrame"] table thead tr th {
+        background-color: #E0E0E0 !important;
+        color: #000000 !important;
+        font-size: 14px !important;
+        border-bottom: 1px solid #000 !important;
+    }
+    
+    /* 4. 表格內容 (白色背景, 黑色文字) */
+    div[data-testid="stDataFrame"] table tbody tr td {
+        background-color: #FFFFFF !important;
+        color: #000000 !important;
+    }
+
+    </style>
+    """, unsafe_allow_html=True)
+
+# ---------------------------------------------------------
+# 2. 初始化 Session State
+# ---------------------------------------------------------
+if 'data' not in st.session_state:
+    st.session_state.data = [] 
+if 'current_stock_name' not in st.session_state:
+    st.session_state.current_stock_name = "尚未選擇股票"
+if 'current_stock_id' not in st.session_state:
+    st.session_state.current_stock_id = ""
+
+# ---------------------------------------------------------
+# 3. 股票搜尋區 (Point 1: 移除提示文字)
+# ---------------------------------------------------------
+col_search, col_space = st.columns([1, 2])
+
+with col_search:
+    with st.form("stock_search"):
+        # Point 1: 移除 "按 Enter" 提示，僅留 "輸入代號"
+        stock_input = st.text_input("輸入代號", placeholder="0050")
+        search_submitted = st.form_submit_button("搜尋")
+
+if search_submitted and stock_input:
+    stock_id = stock_input.strip()
+    ticker_name = f"{stock_id}.TW"
+    
+    manual_map = {
+        "0050": "元大台灣50",
+        "0056": "元大高股息",
+        "00878": "國泰永續高股息",
+        "2330": "台積電",
+        "2317": "鴻海",
+        "2454": "聯發科",
+        "2603": "長榮"
+    }
+    
+    stock_name_display = manual_map.get(stock_id, None)
+    
+    if not stock_name_display:
+        try:
+            info = yf.Ticker(ticker_name).info
+            stock_name_display = info.get('longName', info.get('shortName', stock_id))
+        except:
+            stock_name_display = "未知股票"
+
+    st.session_state.current_stock_name = stock_name_display
+    st.session_state.current_stock_id = stock_id
+
+# Point 2: 已刪除此處原本顯示的大型藍色股票名稱區塊
+
+# ---------------------------------------------------------
+# 4. 資料輸入區 (Point 3: +/- 按鈕已隱藏)
+# ---------------------------------------------------------
+TRANS_TYPES = ["定期定額", "定期定額加碼", "個股", "賣出"]
+
+# 移除原本的灰色標題列，保持介面簡潔，直接顯示輸入表單
+with st.form("entry_form", clear_on_submit=True):
+    
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        selected_type = st.selectbox("交易類型", TRANS_TYPES)
+    with c2:
+        input_date = st.date_input("時間", datetime.today())
+    with c3:
+        # Point 3: CSS 已隱藏 +/- 按鈕
+        price_in = st.number_input("購入股價", min_value=0.0, step=0.1, format="%.2f")
+
+    c4, c5, c6 = st.columns(3)
+    with c4:
+        shares_in = st.number_input("購入股數", min_value=0, step=1)
+    with c5:
+        price_out = st.number_input("賣出股價", min_value=0.0, step=0.1, format="%.2f")
+    with c6:
+        shares_out = st.number_input("賣出股數", min_value=0, step=1)
+        
+    c7, c8, c9 = st.columns(3)
+    with c7:
+        avg_price = st.number_input("現股均價 (賣出填)", min_value=0.0, step=0.1, format="%.2f")
+    with c8:
+        total_amount_val = st.number_input("成交價 (含費)", min_value=0.0, step=1.0, format="%.2f")
+    with c9:
+        trade_mode = st.radio("資金流向", ["買入 (-)", "賣出 (+)"], horizontal=True)
+
+    submitted = st.form_submit_button("確認輸入 (Enter)")
+
+    if submitted:
+        is_buy = trade_mode == "買入 (-)"
+        final_amount = -abs(total_amount_val) if is_buy else abs(total_amount_val)
+        
+        new_entry = {
+            "id": datetime.now().strftime("%Y%m%d%H%M%S"),
+            "delete": False,
+            "date": input_date,
+            "type": selected_type,
+            "buy_price": price_in if price_in > 0 else 0,
+            "buy_shares": shares_in if shares_in > 0 else 0,
+            "sell_price": price_out if price_out > 0 else 0,
+            "sell_shares": shares_out if shares_out > 0 else 0,
+            "avg_price": avg_price if avg_price > 0 else 0,
+            "total_amount": final_amount, 
+        }
+        
+        st.session_state.data.append(new_entry)
+        st.session_state.data.sort(key=lambda x: x['date'])
+        st.success("資料已輸入")
+
+# ---------------------------------------------------------
+# 5. 表格生成與操作按鈕 (Point 4: 黑色按鈕)
+# ---------------------------------------------------------
+col_btn1, col_btn2 = st.columns(2)
+with col_btn1:
+    if st.button("生成表格 (清除舊資料)"):
+        st.session_state.data = []
+        st.rerun()
+with col_btn2:
+    if st.button("輸入至同一表格 (刷新)"):
+        st.rerun()
+
+# ---------------------------------------------------------
+# 6. 表格顯示區 (Point 5: Excel 樣式還原)
+# ---------------------------------------------------------
+if st.session_state.data:
+    st.markdown("<br>", unsafe_allow_html=True) # 增加一點間距
+    
+    # 準備資料
+    df = pd.DataFrame(st.session_state.data)
+    df['date'] = pd.to_datetime(df['date']).dt.date
+
+    # 顯示第一列 (Point 5 - 水藍色: 該股代號及全名)
+    # 使用 Markdown HTML 來模擬表格的 Header，讓它跟下方的表格看起來是一體的
+    header_text = f"{st.session_state.current_stock_id} {st.session_state.current_stock_name}" if st.session_state.current_stock_id else "尚未輸入代號"
+    st.markdown(f'<div class="table-stock-header">{header_text}</div>', unsafe_allow_html=True)
+
+    # 設定顯示格式
+    # 這裡的標題會變成 "表格第二列 (灰色背景)" (透過 CSS 控制)
+    column_config = {
+        "delete": st.column_config.CheckboxColumn("刪除", width="small"),
+        "date": st.column_config.DateColumn("日期", format="YYYY/MM/DD"),
+        "type": st.column_config.TextColumn("交易類型", width="medium"),
+        "buy_price": st.column_config.NumberColumn("購入股價", format="$%.2f"),
+        "buy_shares": st.column_config.NumberColumn("購入股數"),
+        "sell_price": st.column_config.NumberColumn("賣出股價", format="$%.2f"),
+        "sell_shares": st.column_config.NumberColumn("賣出股數"),
+        "avg_price": st.column_config.NumberColumn("現股均價", format="$%.2f"),
+        "total_amount": st.column_config.NumberColumn("成交價(含費)", format="$%.2f"),
+        "id": None
+    }
+
+    # 顯示表格 (第三列資料: 無背景/白色)
+    edited_df = st.data_editor(
+        df,
+        column_config=column_config,
+        use_container_width=True,
+        hide_index=True,
+        disabled=["id"],
+        key="editor"
+    )
+
+    # 刪除功能 (Point 6: 按鈕為黑色)
+    rows_to_delete = edited_df[edited_df.delete == True]
+    if not rows_to_delete.empty:
+        # 修正之前的引號錯誤
+        st.error(⚠️ 您勾選了刪除，確定要移除這些資料嗎？")
+        c_del_1, c_del_2 = st.columns([1, 6])
+        with c_del_1:
+            if st.button("是", type="primary"): # CSS 已將 primary 設為黑底紅字
+                st.session_state.data = edited_df[edited_df.delete == False].drop(columns=['delete']).to_dict('records')
+                for d in st.session_state.data:
+                    d['delete'] = False
+                st.rerun()
+        with c_del_2:
+            if st.button("否"):
+                st.rerun()
+    else:
+        st.session_state.data = edited_df.to_dict('records')
+
+    # ---------------------------------------------------------
+    # 7. 總計表格
+    # ---------------------------------------------------------
+    st.markdown("### 總計表格")
+    
+    if st.session_state.data:
+        calc_df = pd.DataFrame(st.session_state.data)
+        
+        reg_df = calc_df[calc_df['type'] == "定期定額"]
+        bonus_df = calc_df[calc_df['type'] == "定期定額加碼"]
+        sell_df = calc_df[calc_df['type'] == "賣出"]
+        
+        reg_total_price = abs(reg_df['total_amount'].sum())
+        reg_total_shares = reg_df['buy_shares'].sum()
+        bonus_total_price = abs(bonus_df['total_amount'].sum())
+        bonus_total_shares = bonus_df['buy_shares'].sum()
+        
+        buy_total_amt = reg_total_price + bonus_total_price
+        buy_total_shares = reg_total_shares + bonus_total_shares
+        
+        sell_total_amt = sell_df['total_amount'].sum()
+        sell_total_shares = sell_df['sell_shares'].sum()
+        
+        cost = (sell_df['avg_price'] * sell_df['sell_shares']).sum()
+        profit = sell_total_amt - buy_total_amt
+
+        summary_data = {
+            "股票編號": [st.session_state.current_stock_id],
+            "定期定額總價": [reg_total_price],
+            "定期定額股數": [reg_total_shares],
+            "加碼總價": [bonus_total_price],
+            "加碼股數": [bonus_total_shares],
+            "買入總額": [buy_total_amt],
+            "買入總股數": [buy_total_shares],
+            "賣出總額": [sell_total_amt],
+            "總賣出股數": [sell_total_shares],
+            "成本": [cost],
+            "獲利": [profit]
+        }
+        
+        summ_df = pd.DataFrame(summary_data)
+
+        def highlight_summary(row):
+            styles = [''] * len(row)
+            green_text = 'color: #00A600; font-weight: bold;'
+            red_text = 'color: #CE0000; font-weight: bold;'
+            
+            styles[1] = green_text
+            styles[3] = green_text
+            styles[5] = green_text
+            styles[7] = red_text
+            
+            profit_val = row[10]
+            if profit_val > 0:
+                styles[10] = red_text
+            elif profit_val < 0:
+                styles[10] = green_text
+            return styles
+
+        st.dataframe(
+            summ_df.style.apply(highlight_summary, axis=1).format("{:.2f}", subset=[
+                "定期定額總價", "加碼總價", "買入總額", "賣出總額", "成本", "獲利"
+            ]),
+            hide_index=True,
+            use_container_width=True
+        )
