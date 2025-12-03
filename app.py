@@ -261,7 +261,7 @@ if st.session_state.data:
     # 刪除防呆邏輯
     rows_to_delete = edited_df[edited_df.delete == True]
     if not rows_to_delete.empty:
-        st.error(⚠️ 您勾選了刪除，確定要移除這些資料嗎？")
+        st.error("⚠️ 您勾選了刪除，確定要移除這些資料嗎？")
         c_del_1, c_del_2 = st.columns([1, 6])
         with c_del_1:
             if st.button("是", type="primary"):
