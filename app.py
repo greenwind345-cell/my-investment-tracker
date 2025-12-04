@@ -34,11 +34,11 @@ st.markdown("""
         border: 1px solid #FFFFFF !important;
     }
     
-    /* 唯讀輸入框 (disabled) 的樣式修正 - 確保字體是白色 */
+    /* 唯讀輸入框 (disabled) 的樣式修正 */
     .stTextInput input:disabled {
         color: #FFFFFF !important;
         background-color: rgba(255, 255, 255, 0.1) !important;
-        opacity: 1 !important; /* 防止變灰 */
+        opacity: 1 !important;
         -webkit-text-fill-color: #FFFFFF !important;
     }
 
@@ -113,23 +113,18 @@ if 'current_stock_id' not in st.session_state:
     st.session_state.current_stock_id = ""
 
 # ---------------------------------------------------------
-# 3. 股票搜尋區 (修改版: 雙欄位 + Enter 自動搜尋)
+# 3. 股票搜尋區
 # ---------------------------------------------------------
-# 使用 columns 將兩個輸入框並排
 col_input, col_output = st.columns(2)
 
 with col_input:
-    # 移除 form，這樣按下 Enter 就會觸發 rerun
-    # 加上 key 讓 Streamlit 追蹤狀態
     stock_input = st.text_input("輸入代號", placeholder="例如:0050，輸入完畢後請按enter")
 
-# 邏輯處理：當 stock_input 有值時執行搜尋
 display_name = ""
 if stock_input:
     stock_id = stock_input.strip()
     ticker_name = f"{stock_id}.TW"
     
-    # 常用台股代碼對應
     manual_map = {
         "0050": "元大台灣50",
         "0056": "元大高股息",
@@ -149,84 +144,87 @@ if stock_input:
         except:
             found_name = "查無資料 / API 無回應"
     
-    # 更新 Session State
     st.session_state.current_stock_name = found_name
     st.session_state.current_stock_id = stock_id
     display_name = found_name
 else:
-    # 若清空輸入框，也清空名稱
     st.session_state.current_stock_name = ""
     st.session_state.current_stock_id = ""
     display_name = ""
 
 with col_output:
-    # 顯示全名的欄位，設定為 disabled (唯讀)，value 綁定搜尋結果
     st.text_input("股票全名", value=display_name, disabled=True)
 
 # ---------------------------------------------------------
-# 4. 資料輸入區
+# 4. 資料輸入區 (已移除 st.form)
 # ---------------------------------------------------------
 TRANS_TYPES = ["定期定額", "定期定額加碼", "個股", "賣出"]
 
-with st.form("entry_form", clear_on_submit=True):
+# 直接排列輸入框，不使用 form，這樣按鈕才能直接讀取數值
+c1, c2, c3 = st.columns(3)
+with c1:
+    selected_type = st.selectbox("交易類型", TRANS_TYPES)
+with c2:
+    input_date = st.date_input("時間", datetime.today())
+with c3:
+    price_in = st.number_input("購入股價", min_value=0.0, step=0.1, format="%.2f")
+
+c4, c5, c6 = st.columns(3)
+with c4:
+    shares_in = st.number_input("購入股數", min_value=0, step=1)
+with c5:
+    price_out = st.number_input("賣出股價", min_value=0.0, step=0.1, format="%.2f")
+with c6:
+    shares_out = st.number_input("賣出股數", min_value=0, step=1)
     
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        selected_type = st.selectbox("交易類型", TRANS_TYPES)
-    with c2:
-        input_date = st.date_input("時間", datetime.today())
-    with c3:
-        price_in = st.number_input("購入股價", min_value=0.0, step=0.1, format="%.2f")
-
-    c4, c5, c6 = st.columns(3)
-    with c4:
-        shares_in = st.number_input("購入股數", min_value=0, step=1)
-    with c5:
-        price_out = st.number_input("賣出股價", min_value=0.0, step=0.1, format="%.2f")
-    with c6:
-        shares_out = st.number_input("賣出股數", min_value=0, step=1)
-        
-    c7, c8, c9 = st.columns(3)
-    with c7:
-        avg_price = st.number_input("現股均價 (賣出填)", min_value=0.0, step=0.1, format="%.2f")
-    with c8:
-        total_amount_val = st.number_input("成交價 (含費)", min_value=0.0, step=1.0, format="%.2f")
-    with c9:
-        trade_mode = st.radio("資金流向", ["買入 (-)", "賣出 (+)"], horizontal=True)
-
-    submitted = st.form_submit_button("確認輸入 (Enter)")
-
-    if submitted:
-        is_buy = trade_mode == "買入 (-)"
-        final_amount = -abs(total_amount_val) if is_buy else abs(total_amount_val)
-        
-        new_entry = {
-            "id": datetime.now().strftime("%Y%m%d%H%M%S"),
-            "delete": False,
-            "date": input_date,
-            "type": selected_type,
-            "buy_price": price_in if price_in > 0 else 0,
-            "buy_shares": shares_in if shares_in > 0 else 0,
-            "sell_price": price_out if price_out > 0 else 0,
-            "sell_shares": shares_out if shares_out > 0 else 0,
-            "avg_price": avg_price if avg_price > 0 else 0,
-            "total_amount": final_amount, 
-        }
-        
-        st.session_state.data.append(new_entry)
-        st.session_state.data.sort(key=lambda x: x['date'])
-        st.success("資料已輸入")
+c7, c8, c9 = st.columns(3)
+with c7:
+    avg_price = st.number_input("現股均價 (賣出填)", min_value=0.0, step=0.1, format="%.2f")
+with c8:
+    total_amount_val = st.number_input("成交價 (含費)", min_value=0.0, step=1.0, format="%.2f")
+with c9:
+    trade_mode = st.radio("資金流向", ["買入 (-)", "賣出 (+)"], horizontal=True)
 
 # ---------------------------------------------------------
-# 5. 表格生成與操作按鈕
+# 5. 按鈕邏輯 (生成與刷新)
 # ---------------------------------------------------------
+def create_entry_data():
+    """ 輔助函式：從目前的輸入框狀態建立資料字典 """
+    is_buy = trade_mode == "買入 (-)"
+    final_amount = -abs(total_amount_val) if is_buy else abs(total_amount_val)
+    
+    return {
+        "id": datetime.now().strftime("%Y%m%d%H%M%S"),
+        "delete": False,
+        "date": input_date,
+        "type": selected_type,
+        "buy_price": price_in if price_in > 0 else 0,
+        "buy_shares": shares_in if shares_in > 0 else 0,
+        "sell_price": price_out if price_out > 0 else 0,
+        "sell_shares": shares_out if shares_out > 0 else 0,
+        "avg_price": avg_price if avg_price > 0 else 0,
+        "total_amount": final_amount, 
+    }
+
 col_btn1, col_btn2 = st.columns(2)
+
+# 按鈕 1: 生成表格 (清除舊資料並寫入當前那一筆)
 with col_btn1:
     if st.button("生成表格 (清除舊資料)"):
-        st.session_state.data = []
+        st.session_state.data = [] # 清空
+        new_entry = create_entry_data()
+        st.session_state.data.append(new_entry)
+        st.success("已生成新表格")
         st.rerun()
+
+# 按鈕 2: 輸入至同一表格 (不清除，直接新增當前那一筆)
 with col_btn2:
     if st.button("輸入至同一表格 (刷新)"):
+        new_entry = create_entry_data()
+        st.session_state.data.append(new_entry)
+        # 排序
+        st.session_state.data.sort(key=lambda x: x['date'])
+        st.success("已新增至表格")
         st.rerun()
 
 # ---------------------------------------------------------
@@ -238,7 +236,7 @@ if st.session_state.data:
     df = pd.DataFrame(st.session_state.data)
     df['date'] = pd.to_datetime(df['date']).dt.date
 
-    # 顯示表格第一列標題
+    # 顯示表格標題
     header_text = f"{st.session_state.current_stock_id} {st.session_state.current_stock_name}" if st.session_state.current_stock_id else "尚未輸入代號"
     st.markdown(f'<div class="table-stock-header">{header_text}</div>', unsafe_allow_html=True)
 
