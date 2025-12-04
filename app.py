@@ -27,14 +27,13 @@ st.markdown("""
     }
 
     /* --- 輸入框樣式優化 --- */
-    /* 輸入框背景半透明黑，文字白色 */
     .stTextInput input, .stNumberInput input, .stSelectbox div[data-baseweb="select"], .stDateInput input {
         color: #FFFFFF !important; 
         background-color: rgba(0, 0, 0, 0.3) !important;
         border: 1px solid #FFFFFF !important;
     }
     
-    /* 唯讀輸入框 (disabled) 的樣式修正 */
+    /* 唯讀輸入框樣式 */
     .stTextInput input:disabled {
         color: #FFFFFF !important;
         background-color: rgba(255, 255, 255, 0.1) !important;
@@ -48,7 +47,7 @@ st.markdown("""
         color: white;
     }
 
-    /* 按鈕樣式 (黑色底，白色字) */
+    /* --- 按鈕樣式 (黑色底，白色字) --- */
     div.stButton > button {
         background-color: #000000 !important;
         color: #FFFFFF !important;
@@ -87,6 +86,7 @@ st.markdown("""
         padding: 0px !important;
     }
     
+    /* 表格標題列 (灰色) */
     div[data-testid="stDataFrame"] table thead tr th {
         background-color: #E0E0E0 !important;
         color: #000000 !important;
@@ -94,9 +94,19 @@ st.markdown("""
         border-bottom: 1px solid #000 !important;
     }
     
+    /* 表格內容 (白色) */
     div[data-testid="stDataFrame"] table tbody tr td {
         background-color: #FFFFFF !important;
         color: #000000 !important;
+    }
+    
+    /* 導航列置中與樣式 */
+    .nav-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 10px;
     }
 
     </style>
@@ -111,6 +121,9 @@ if 'current_stock_name' not in st.session_state:
     st.session_state.current_stock_name = ""
 if 'current_stock_id' not in st.session_state:
     st.session_state.current_stock_id = ""
+# 新增: 紀錄目前檢視的年份 (預設為今年)
+if 'view_year' not in st.session_state:
+    st.session_state.view_year = datetime.now().year
 
 # ---------------------------------------------------------
 # 3. 股票搜尋區
@@ -156,11 +169,10 @@ with col_output:
     st.text_input("股票全名", value=display_name, disabled=True)
 
 # ---------------------------------------------------------
-# 4. 資料輸入區 (已移除 st.form)
+# 4. 資料輸入區
 # ---------------------------------------------------------
 TRANS_TYPES = ["定期定額", "定期定額加碼", "個股", "賣出"]
 
-# 直接排列輸入框，不使用 form，這樣按鈕才能直接讀取數值
 c1, c2, c3 = st.columns(3)
 with c1:
     selected_type = st.selectbox("交易類型", TRANS_TYPES)
@@ -179,24 +191,26 @@ with c6:
     
 c7, c8, c9 = st.columns(3)
 with c7:
-    avg_price = st.number_input("現股均價 (賣出填)", min_value=0.0, step=0.1, format="%.2f")
+    # 修正標籤文字
+    avg_price = st.number_input("現均股價 (僅賣出時填寫)", min_value=0.0, step=0.1, format="%.2f")
 with c8:
-    total_amount_val = st.number_input("成交價 (含費)", min_value=0.0, step=1.0, format="%.2f")
+    # 修正標籤文字
+    total_amount_val = st.number_input("成交價 (含手續費)", min_value=0.0, step=1.0, format="%.2f")
 with c9:
     trade_mode = st.radio("資金流向", ["買入 (-)", "賣出 (+)"], horizontal=True)
 
 # ---------------------------------------------------------
-# 5. 按鈕邏輯 (生成與刷新)
+# 5. 按鈕邏輯 (新增資料)
 # ---------------------------------------------------------
 def create_entry_data():
-    """ 輔助函式：從目前的輸入框狀態建立資料字典 """
+    """ 輔助函式：建立資料 """
     is_buy = trade_mode == "買入 (-)"
     final_amount = -abs(total_amount_val) if is_buy else abs(total_amount_val)
     
     return {
         "id": datetime.now().strftime("%Y%m%d%H%M%S"),
         "delete": False,
-        "date": input_date,
+        "date": input_date, # 這裡的 date 是 datetime.date 物件
         "type": selected_type,
         "buy_price": price_in if price_in > 0 else 0,
         "buy_shares": shares_in if shares_in > 0 else 0,
@@ -208,37 +222,96 @@ def create_entry_data():
 
 col_btn1, col_btn2 = st.columns(2)
 
-# 按鈕 1: 生成表格 (清除舊資料並寫入當前那一筆)
+# 按鈕 1: 開始全新的篇章
 with col_btn1:
-    if st.button("生成表格 (清除舊資料)"):
-        st.session_state.data = [] # 清空
+    if st.button("開始全新的篇章"):
+        # 邏輯: 
+        # 1. 寫入資料
+        # 2. 將檢視年份切換到該筆資料的年份 (即"新的一頁")
+        # 3. 不刪除舊資料
         new_entry = create_entry_data()
         st.session_state.data.append(new_entry)
-        st.success("已生成新表格")
+        st.session_state.view_year = input_date.year # 切換至新章節
+        st.success(f"已開啟 {input_date.year} 年的新篇章")
         st.rerun()
 
-# 按鈕 2: 輸入至同一表格 (不清除，直接新增當前那一筆)
+# 按鈕 2: 更新到同一章
 with col_btn2:
-    if st.button("輸入至同一表格 (刷新)"):
+    if st.button("更新到同一章"):
+        # 邏輯:
+        # 1. 寫入資料
+        # 2. 檢視年份切換到該筆資料的年份 (確保使用者看得到剛輸入的資料)
         new_entry = create_entry_data()
         st.session_state.data.append(new_entry)
-        # 排序
-        st.session_state.data.sort(key=lambda x: x['date'])
-        st.success("已新增至表格")
+        st.session_state.data.sort(key=lambda x: x['date']) # 排序
+        st.session_state.view_year = input_date.year
+        st.success("已更新資料")
         st.rerun()
 
 # ---------------------------------------------------------
-# 6. 表格顯示區
+# 6. 表格顯示區 (年份導航 + 資料表格)
 # ---------------------------------------------------------
-if st.session_state.data:
+
+# 計算所有存在的年份
+all_years = sorted(list(set([d['date'].year for d in st.session_state.data])))
+if not all_years:
+    # 若無資料，預設當前年份
+    all_years = [datetime.now().year]
+
+# 確保 view_year 在有效範圍內 (防呆)
+if st.session_state.view_year not in all_years:
+    if all_years:
+        st.session_state.view_year = all_years[-1] # 預設顯示最新年份
+
+current_year_idx = all_years.index(st.session_state.view_year)
+
+st.markdown("---")
+
+# --- 年份導航列 ---
+c_nav1, c_nav2, c_nav3, c_nav4, c_nav5 = st.columns([2, 1, 2, 1, 2])
+
+# 左箭頭 (←)
+with c_nav2:
+    if current_year_idx > 0: # 如果不是最舊年份
+        if st.button("←", key="prev_year"):
+            st.session_state.view_year = all_years[current_year_idx - 1]
+            st.rerun()
+
+# 中間下拉選單 (模擬長按選擇年份)
+with c_nav3:
+    selected_year = st.selectbox(
+        "選擇篇章", 
+        all_years, 
+        index=current_year_idx, 
+        label_visibility="collapsed"
+    )
+    if selected_year != st.session_state.view_year:
+        st.session_state.view_year = selected_year
+        st.rerun()
+
+# 右箭頭 (→)
+with c_nav4:
+    if current_year_idx < len(all_years) - 1: # 如果不是最新年份
+        if st.button("→", key="next_year"):
+            st.session_state.view_year = all_years[current_year_idx + 1]
+            st.rerun()
+
+# --- 資料篩選與顯示 ---
+# 篩選出當前 view_year 的資料
+current_year_data = [d for d in st.session_state.data if d['date'].year == st.session_state.view_year]
+
+if current_year_data:
     st.markdown("<br>", unsafe_allow_html=True)
     
-    df = pd.DataFrame(st.session_state.data)
-    df['date'] = pd.to_datetime(df['date']).dt.date
-
-    # 顯示表格標題
-    header_text = f"{st.session_state.current_stock_id} {st.session_state.current_stock_name}" if st.session_state.current_stock_id else "尚未輸入代號"
+    # 顯示股票標題
+    header_text = f"{st.session_state.current_stock_id} {st.session_state.current_stock_name} ({st.session_state.view_year}年)" if st.session_state.current_stock_id else f"尚未輸入代號 ({st.session_state.view_year}年)"
     st.markdown(f'<div class="table-stock-header">{header_text}</div>', unsafe_allow_html=True)
+
+    # 顯示操作說明
+    st.info("💡 點擊表格可以編輯數值，編輯完成後點擊表格外任意處即可儲存。若要刪除，請勾選「刪除」欄位後，點擊下方的紅色按鈕確認。")
+
+    df = pd.DataFrame(current_year_data)
+    df['date'] = pd.to_datetime(df['date']).dt.date
 
     column_config = {
         "delete": st.column_config.CheckboxColumn("刪除", width="small"),
@@ -262,31 +335,57 @@ if st.session_state.data:
         key="editor"
     )
 
-    # 刪除功能
+    # 刪除功能邏輯
     rows_to_delete = edited_df[edited_df.delete == True]
     if not rows_to_delete.empty:
         st.error("⚠️ 您勾選了刪除，確定要移除這些資料嗎？")
         c_del_1, c_del_2 = st.columns([1, 6])
         with c_del_1:
             if st.button("是", type="primary"):
-                st.session_state.data = edited_df[edited_df.delete == False].drop(columns=['delete']).to_dict('records')
-                for d in st.session_state.data:
-                    d['delete'] = False
+                # 找出要刪除的 IDs
+                delete_ids = rows_to_delete['id'].tolist()
+                # 從原始 session_state.data 中移除
+                st.session_state.data = [d for d in st.session_state.data if d['id'] not in delete_ids]
                 st.rerun()
         with c_del_2:
             if st.button("否"):
                 st.rerun()
     else:
-        st.session_state.data = edited_df.to_dict('records')
+        # 更新編輯後的資料 (只更新當前年份的資料)
+        # 這邊稍微複雜：我們需要將 edited_df 的變更寫回 session_state.data
+        # 簡單作法：先從 session 中移除當年份舊資料，再加入編輯後的新資料
+        # 但要注意不要把其他年份刪了
+        
+        # 1. 取得編輯後的 records
+        edited_records = edited_df.to_dict('records')
+        
+        # 2. 更新 session_state
+        # 建立一個 id 對應 map
+        id_map = {d['id']: d for d in edited_records}
+        
+        # 3. 遍歷 session data，如果有在編輯清單中，就更新，否則保留
+        new_session_data = []
+        for d in st.session_state.data:
+            if d['id'] in id_map:
+                # 為了避免日期被 data_editor 改成 Timestamp，需轉回 date 物件
+                updated_record = id_map[d['id']]
+                if isinstance(updated_record['date'], pd.Timestamp):
+                    updated_record['date'] = updated_record['date'].date()
+                new_session_data.append(updated_record)
+            else:
+                new_session_data.append(d)
+        
+        st.session_state.data = new_session_data
 
     # ---------------------------------------------------------
-    # 7. 總計表格
+    # 7. 本章重點 (總計表格)
     # ---------------------------------------------------------
-    st.markdown("### 總計表格")
+    st.markdown("### 本章重點") # 名稱修改
     
-    if st.session_state.data:
-        calc_df = pd.DataFrame(st.session_state.data)
-        
+    # 只計算「當前年份」的資料
+    calc_df = pd.DataFrame(current_year_data)
+    
+    if not calc_df.empty:
         reg_df = calc_df[calc_df['type'] == "定期定額"]
         bonus_df = calc_df[calc_df['type'] == "定期定額加碼"]
         sell_df = calc_df[calc_df['type'] == "賣出"]
@@ -338,10 +437,22 @@ if st.session_state.data:
                 styles[10] = green_text
             return styles
 
+        # 設定總計表格的欄位寬度 (解決負號被遮住的問題)
         st.dataframe(
             summ_df.style.apply(highlight_summary, axis=1).format("{:.2f}", subset=[
                 "定期定額總價", "加碼總價", "買入總額", "賣出總額", "成本", "獲利"
             ]),
             hide_index=True,
-            use_container_width=True
+            use_container_width=True,
+            column_config={
+                # 強制設定寬度為 medium，讓負號有空間顯示
+                "買入總額": st.column_config.NumberColumn(width="medium"),
+                "獲利": st.column_config.NumberColumn(width="medium"),
+                "定期定額總價": st.column_config.NumberColumn(width="medium"),
+                "加碼總價": st.column_config.NumberColumn(width="medium"),
+                "賣出總額": st.column_config.NumberColumn(width="medium"),
+                "成本": st.column_config.NumberColumn(width="medium"),
+            }
         )
+else:
+    st.info(f"目前 {st.session_state.view_year} 年尚無資料，請由上方輸入。")
