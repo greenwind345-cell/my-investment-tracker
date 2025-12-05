@@ -8,125 +8,115 @@ from datetime import datetime
 # ---------------------------------------------------------
 st.set_page_config(page_title="投資分析 App", layout="wide")
 
-# Google Drive 圖片處理
-# 輸入框羽毛底線 (圖二) - 這是直接檔案連結，轉換為可讀取格式
-input_border_url = "https://drive.google.com/uc?export=view&id=1Qu2Pr214eYhT0vMbCPLTPpzj0iPFklxV"
-
-# 表格邊框 (圖三) 
-# !!! 重要 !!! 
-# 您提供的連結是資料夾，請將資料夾內那張圖片的 ID 填入下方引號中
-# 例如圖片連結是 https://drive.google.com/file/d/1SgUWs0Qfx.../view
-# 則 ID 為 1SgUWs0Qfx...
-table_border_id = "YOUR_IMAGE_ID_HERE" 
-table_border_url = f"https://drive.google.com/uc?export=view&id={table_border_id}"
-
 # 自定義 CSS
-st.markdown(f"""
+st.markdown("""
     <style>
-    /* 1. 全局背景色: #1E3947 */
-    .stApp {{
-        background-color: #1E3947;
-    }}
+    /* 1. 全局背景色: HSV(201, 57%, 18%) -> Hex #14252E */
+    .stApp {
+        background-color: #14252E;
+    }
     
     /* 全局文字: 白色 */
-    .stApp, p, label, .stMarkdown, h1, h2, h3, h4, h5, h6, span, div {{
+    .stApp, p, label, .stMarkdown, h1, h2, h3, h4, h5, h6, span, div {
         color: #FFFFFF;
-    }}
+    }
 
     /* 隱藏數字輸入框的 +/- 按鈕 */
-    div[data-testid="stNumberInput"] button {{
+    div[data-testid="stNumberInput"] button {
         display: none;
-    }}
+    }
 
-    /* --- 2. 輸入框邊框樣式 (圖二 - 羽毛) --- */
+    /* --- 輸入框樣式 --- */
+    .stTextInput input, .stNumberInput input, .stSelectbox div[data-baseweb="select"], .stDateInput input {
+        color: #FFFFFF !important; 
+        background-color: rgba(0, 0, 0, 0.3) !important;
+        border: 1px solid #FFFFFF !important;
+    }
     
-    /* 移除原本的輸入框邊框與背景 */
-    .stTextInput input, .stNumberInput input, .stSelectbox div[data-baseweb="select"], .stDateInput input {{
-        background-color: transparent !important;
-        border: none !important;
-        border-bottom: 0px solid transparent !important;
+    /* 唯讀輸入框樣式 */
+    .stTextInput input:disabled {
         color: #FFFFFF !important;
-        padding-left: 5px;
-    }}
-    
-    /* 針對輸入框的外層容器應用羽毛圖片 */
-    div[data-testid="stTextInput"], div[data-testid="stNumberInput"], div[data-testid="stSelectbox"], div[data-testid="stDateInput"] {{
-        background-image: url('{input_border_url}');
-        background-size: 100% 40px; /* 寬度100%, 高度固定以免變形太大 */
-        background-repeat: no-repeat;
-        background-position: bottom center;
-        padding-bottom: 15px; /* 留出底部空間給羽毛圖 */
-        margin-bottom: 10px;
-    }}
-    
-    /* 修正下拉選單 */
-    ul[data-testid="stSelectboxVirtualDropdown"] li {{
-        background-color: #1E3947;
+        background-color: rgba(255, 255, 255, 0.1) !important;
+        opacity: 1 !important;
+        -webkit-text-fill-color: #FFFFFF !important;
+    }
+
+    /* 下拉選單選項 */
+    ul[data-testid="stSelectboxVirtualDropdown"] li {
+        background-color: #14252E;
         color: white;
-    }}
+    }
 
     /* --- 按鈕樣式 (黑色底，白色字) --- */
-    div.stButton > button {{
+    div.stButton > button {
         background-color: #000000 !important;
         color: #FFFFFF !important;
         border: 1px solid #FFFFFF !important;
         font-weight: bold;
         border-radius: 5px;
         transition: 0.3s;
-    }}
-    div.stButton > button:hover {{
+    }
+    div.stButton > button:hover {
         background-color: #333333 !important;
         border-color: #66B3FF !important;
-    }}
+    }
     /* 刪除確認按鈕 (紅字) */
-    div.stButton > button[kind="primary"] {{
+    div.stButton > button[kind="primary"] {
         background-color: #000000 !important;
         color: #CE0000 !important;
         border: 1px solid #CE0000 !important;
-    }}
-    
-    /* --- 3. 表格樣式與邊框 (圖三) --- */
-    
-    .table-stock-header {{
+    }
+
+    /* --- 表格樣式 --- */
+    .table-stock-header {
         background-color: #66B3FF;
         color: #000000 !important;
         font-size: 18px;
         font-weight: bold;
         padding: 8px;
         text-align: center;
-        /* 標題與表格分開一點以免重疊邊框 */
-        margin-bottom: 10px; 
-    }}
+        border-top: 1px solid #000;
+        border-left: 1px solid #000;
+        border-right: 1px solid #000;
+        margin-bottom: 0px;
+    }
 
-    /* 針對 Streamlit 表格容器設定圖三邊框 */
-    div[data-testid="stDataFrame"] {{
-        background-color: white; /* 表格內容底色 */
-        padding: 15px; /* 內距，確保內容不被邊框遮住 */
-        
-        /* 若您填入了正確的圖片 ID，這行會生效 */
-        border-image: url('{table_border_url}') 30 stretch;
-        border-width: 20px;
-        border-style: solid;
-        
-        /* 備用方案: 若圖三讀取失敗，顯示金色邊框 */
-        border: 5px double #FFD700; 
-        border-radius: 10px;
-    }}
+    div[data-testid="stDataFrame"] {
+        background-color: transparent !important;
+        padding: 0px !important;
+        /* 預設邊框 (未點擊時) */
+        border: 1px solid transparent; 
+        border-radius: 5px;
+        transition: border 0.2s;
+    }
+    
+    /* --- 紅色邊框互動設計 --- */
+    div[data-testid="stDataFrame"]:focus-within {
+        border: 2px solid #CE0000 !important;
+        box-shadow: 0 0 8px rgba(206, 0, 0, 0.6);
+    }
     
     /* 表格標題列 (灰色) */
-    div[data-testid="stDataFrame"] table thead tr th {{
+    div[data-testid="stDataFrame"] table thead tr th {
         background-color: #E0E0E0 !important;
         color: #000000 !important;
         font-size: 14px !important;
         border-bottom: 1px solid #000 !important;
-    }}
+    }
     
     /* 表格內容 (白色) */
-    div[data-testid="stDataFrame"] table tbody tr td {{
+    div[data-testid="stDataFrame"] table tbody tr td {
         background-color: #FFFFFF !important;
         color: #000000 !important;
-    }}
+    }
     
+    /* 說明文字區塊樣式 */
+    div.stAlert {
+        background-color: rgba(0, 0, 0, 0.5);
+        border: 1px solid #FFFFFF;
+        color: #FFFFFF;
+    }
+
     </style>
     """, unsafe_allow_html=True)
 
@@ -153,16 +143,16 @@ if st.session_state.page == 'input':
     #               頁面 1: 輸入頁
     # ==========================================
     
-    # --- 頂部導航區 (右上角按鈕) ---
+    # --- 右上角按鈕區 ---
     col_top_1, col_top_2 = st.columns([5, 1])
     
     with col_top_2:
-        # 只有當有表格資料生成時，才顯示按鈕
+        # 如果有資料，顯示連結按鈕
         if st.session_state.data:
-            if st.button("前往目前進度"):
+            if st.button("前往目前紀錄"):
                 st.session_state.page = 'table'
                 st.rerun()
-    
+
     # --- 股票搜尋區 ---
     col_input, col_output = st.columns(2)
 
@@ -331,12 +321,12 @@ elif st.session_state.page == 'table':
     if current_year_data:
         st.markdown("<br>", unsafe_allow_html=True)
         
-        # 1. 股票標題
+        # 1. 說明文字 (標題上方)
+        st.info("💡 點擊表格兩下編輯數值，編輯完成後點擊表格外任意處即可儲存。若要刪除，請勾選「刪除」欄位後，點擊下方的紅色按鈕確認。")
+
+        # 2. 股票標題
         header_text = f"{st.session_state.current_stock_id} {st.session_state.current_stock_name} ({st.session_state.view_year}年)" if st.session_state.current_stock_id else f"尚未輸入代號 ({st.session_state.view_year}年)"
         st.markdown(f'<div class="table-stock-header">{header_text}</div>', unsafe_allow_html=True)
-        
-        # 2. 說明文字 (標題下方)
-        st.info("💡 點擊表格可以編輯數值，編輯完成後點擊表格外任意處即可儲存。若要刪除，請勾選「刪除」欄位後，點擊下方的紅色按鈕確認。")
 
         # 3. 表格顯示
         df = pd.DataFrame(current_year_data)
@@ -345,7 +335,8 @@ elif st.session_state.page == 'table':
         column_config = {
             "delete": st.column_config.CheckboxColumn("刪除", width="small"),
             "date": st.column_config.DateColumn("日期", format="YYYY/MM/DD"),
-            "type": st.column_config.TextColumn("交易類型", width="medium"),
+            # 交易類型設定為無法修改
+            "type": st.column_config.TextColumn("交易類型", width="medium", disabled=True),
             "buy_price": st.column_config.NumberColumn("購入股價", format="$%.2f"),
             "buy_shares": st.column_config.NumberColumn("購入股數"),
             "sell_price": st.column_config.NumberColumn("賣出股價", format="$%.2f"),
@@ -355,7 +346,6 @@ elif st.session_state.page == 'table':
             "id": None
         }
 
-        # 這裡的表格會套用 CSS 中的 border-image (圖三)
         edited_df = st.data_editor(
             df,
             column_config=column_config,
@@ -379,15 +369,38 @@ elif st.session_state.page == 'table':
                 if st.button("否"):
                     st.rerun()
         else:
-            # 更新編輯
+            # 更新編輯 (含自動計算成交價邏輯)
             edited_records = edited_df.to_dict('records')
             id_map = {d['id']: d for d in edited_records}
+            
             new_session_data = []
             for d in st.session_state.data:
                 if d['id'] in id_map:
+                    # 取得編輯後的列
                     updated_record = id_map[d['id']]
+                    
+                    # --- 自動計算邏輯 ---
+                    # 根據交易類型判斷，重新計算成交價 (Price * Shares)
+                    # 這會確保使用者修改了單價或股數後，總價會自動更新
+                    
+                    # 判斷是否為賣出 (正數)，其他類型為買入 (負數)
+                    t_type = updated_record.get('type', '')
+                    
+                    if t_type == "賣出":
+                        price = updated_record.get('sell_price', 0)
+                        shares = updated_record.get('sell_shares', 0)
+                        # 賣出 = 正數
+                        updated_record['total_amount'] = abs(price * shares)
+                    else:
+                        price = updated_record.get('buy_price', 0)
+                        shares = updated_record.get('buy_shares', 0)
+                        # 買入 = 負數
+                        updated_record['total_amount'] = -abs(price * shares)
+                    
+                    # 恢復日期格式
                     if isinstance(updated_record['date'], pd.Timestamp):
                         updated_record['date'] = updated_record['date'].date()
+                        
                     new_session_data.append(updated_record)
                 else:
                     new_session_data.append(d)
